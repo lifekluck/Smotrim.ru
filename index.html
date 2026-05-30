@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Smotrim.ru</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1c1c1e;
+      --primary: #8b5cf6;
+      --text: #ffffff;
+      --text-secondary: #a1a1aa;
+      --border: rgba(139, 92, 246, 0.2);
+      --shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    body.light {
+      --bg: #ffffff;
+      --surface: #f4f4f5;
+      --primary: #7c3aed;
+      --text: #18181b;
+      --text-secondary: #52525b;
+      --border: rgba(124, 58, 237, 0.15);
+      --shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: background 0.3s, color 0.3s;
+    }
+    #worm-canvas {
+      position: absolute;
+      top:0; left:0; width:100%; height:100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    header {
+      backdrop-filter: blur(12px);
+      background: var(--surface);
+      padding: 16px 20px;
+      font-size: 22px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .container { flex:1; overflow-y:auto; padding:20px; position:relative; z-index:5; }
+    .bottom-nav {
+      position: relative;
+      backdrop-filter: blur(16px);
+      background: var(--surface);
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-end;
+      padding: 12px 10px 8px;
+      border-top: 1px solid var(--border);
+      z-index: 10;
+      height: 72px;
+    }
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      cursor: pointer;
+      flex: 1;
+    }
+    .nav-btn.active { color: var(--primary); }
+    .create-room-btn {
+      position: absolute;
+      left: 50%;
+      top: -28px;
+      transform: translateX(-50%);
+      width: 64px; height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      border: none;
+      box-shadow: 0 8px 28px rgba(139,92,246,0.6);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      z-index: 20;
+    }
+    .create-room-btn:active {
+      transform: translateX(-50%) scale(0.93);
+      box-shadow: 0 4px 16px rgba(139,92,246,0.8);
+    }
+    .create-room-btn span { font-size: 32px; color: white; line-height: 1; }
+    .card {
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 20px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s;
+    }
+    .card:active { transform: scale(0.98); }
+    .btn {
+      background: var(--primary);
+      border: none;
+      border-radius: 16px;
+      padding: 14px 24px;
+      font-weight: 600;
+      color: white;
+      transition: all 0.2s;
+      cursor: pointer;
+      width: 100%;
+      box-shadow: 0 4px 14px rgba(139,92,246,0.4);
+    }
+    .btn:active { transform: scale(0.96); opacity: 0.9; }
+    .input {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      color: var(--text);
+      width: 100%;
+      margin: 8px 0;
+      font-size: 16px;
+    }
+    video, iframe {
+      width: 100%;
+      border-radius: 20px;
+      background: black;
+      aspect-ratio: 16/9;
+    }
+    .chat-msg {
+      background: rgba(255,255,255,0.06);
+      padding: 12px;
+      border-radius: 16px;
+      margin: 6px 0;
+      font-size: 15px;
+    }
+    .muted { opacity: 0.4; }
+    .setting-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 0;
+    }
+    .toggle {
+      width: 52px; height: 28px;
+      background: #3f3f46;
+      border-radius: 28px;
+      position: relative;
+      transition: background 0.3s;
+    }
+    .toggle.active { background: var(--primary); }
+    .toggle::after {
+      content: '';
+      width: 24px; height: 24px;
+      background: white;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px; left: 2px;
+      transition: left 0.3s;
+    }
+    .toggle.active::after { left: 26px; }
+  </style>
+</head>
+<body class="dark">
+  <canvas id="worm-canvas"></canvas>
+  <header>
+    <span style="display:flex;align-items:center;gap:10px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+      Smotrim.ru
+    </span>
+    <span id="room-info" style="font-size:14px;color:var(--text-secondary);"></span>
+  </header>
+  <div class="container" id="app">
+    <div id="menu-section" style="display:block;">
+      <h2 style="margin-bottom:24px;font-weight:600;">Комнаты</h2>
+      <div id="rooms-list"></div>
+    </div>
+    <div id="room-section" style="display:none;">
+      <div id="player-container" style="position:relative;margin-bottom:12px;">
+        <video id="player" style="display:none;" controls playsinline></video>
+        <iframe id="youtube-player" style="display:none;" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+      </div>
+      <div id="chat-box" style="max-height:180px;overflow-y:auto;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input type="text" class="input" id="chat-input" placeholder="Сообщение..." style="flex:1;">
+        <button class="btn" id="send-msg" style="width:auto;padding:14px 18px;">➤</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="invite-btn" style="flex:1;">📋 Копировать ссылку</button>
+        <button class="btn" id="leave-btn" style="flex:1;background:#dc2626;">Выйти</button>
+      </div>
+    </div>
+    <div id="settings-section" style="display:none;">
+      <h2 style="margin-bottom:24px;">Настройки</h2>
+      <div class="card">
+        <div class="setting-row">
+          <span>Тёмная тема</span>
+          <div class="toggle active" id="theme-toggle" onclick="toggleTheme()"></div>
+        </div>
+        <div class="setting-row">
+          <span>Анимация фона</span>
+          <div class="toggle active" id="anim-toggle" onclick="toggleAnimation()"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-tab="menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Главная
+    </button>
+    <button class="nav-btn" data-tab="settings">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Настройки
+    </button>
+    <button class="create-room-btn" id="create-room-nav">＋</button>
+  </div>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    const API = 'https://lifekluck.pythonanywhere.com';
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('id');
+    const isOwner = params.get('owner') === '1';
+
+    let myUserId = null;
+    let currentRoom = null;
+    let pollInterval = null;
+    let youtubePlayer = null;
+    let playerType = 'mp4';
+
+    tg.ready();
+
+    async function initUser() {
+      try {
+        const resp = await fetch(`${API}/validate`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({initData: tg.initData || ''})
+        });
+        const data = await resp.json();
+        myUserId = data.user_id;
+        if (roomId) joinRoom(roomId);
+        else loadRooms();
+      } catch(e) { console.error(e); }
+    }
+
+    async function loadRooms() {
+      const resp = await fetch(`${API}/rooms?user_id=${myUserId}`);
+      const rooms = await resp.json();
+      const list = document.getElementById('rooms-list');
+      if (!rooms.length) list.innerHTML = '<p style="color:var(--text-secondary);">Нет активных комнат</p>';
+      else list.innerHTML = rooms.map(r => `
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <b>${r.owner_name || 'Комната'}</b><br>
+            <small style="color:var(--text-secondary);">👥 ${Object.keys(r.users).length}/${r.max_users}</small>
+          </div>
+          <button class="btn" style="width:auto;padding:10px 20px;" onclick="joinRoom('${r.id}')">Войти</button>
+        </div>
+      `).join('');
+    }
+
+    async function createRoom() {
+      const videoUrl = prompt('Вставь прямую ссылку на видео (.mp4 или YouTube):');
+      if (!videoUrl) return;
+      const resp = await fetch(`${API}/create`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          video_url: videoUrl,
+          owner_id: myUserId,
+          owner_name: tg.initDataUnsafe?.user?.first_name || 'Хозяин'
+        })
+      });
+      const data = await resp.json();
+      currentRoom = data.room;
+      showSection('room');
+      setupPlayer(currentRoom.video_url);
+      initRoomPolling();
+    }
+
+    async function joinRoom(id) {
+      const resp = await fetch(`${API}/join`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({room_id: id, user_id: myUserId})
+      });
+      const data = await resp.json();
+      if (data.error) { alert(data.error); return; }
+      currentRoom = data.room;
+      showSection('room');
+      setupPlayer(currentRoom.video_url);
+      initRoomPolling();
+    }
+
+    function setupPlayer(url) {
+      document.getElementById('player').style.display = 'none';
+      document.getElementById('youtube-player').style.display = 'none';
+      if (youtubePlayer) { youtubePlayer.destroy(); youtubePlayer = null; }
+
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        playerType = 'youtube';
+        const videoId = extractYouTubeId(url);
+        if (videoId) {
+          document.getElementById('youtube-player').style.display = 'block';
+          if (!youtubePlayer) {
+            youtubePlayer = new YT.Player('youtube-player', {
+              videoId: videoId,
+              playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0 },
+              events: {
+                onReady: () => {
+                  if (isOwner) {
+                    youtubePlayer.playVideo();
+                    youtubePlayer.addEventListener('onStateChange', onYouTubeStateChange);
+                  }
+                }
+              }
+            });
+          }
+        }
+      } else {
+        playerType = 'mp4';
+        const player = document.getElementById('player');
+        player.style.display = 'block';
+        player.src = url;
+        player.load();
+        if (isOwner) {
+          player.onpause = () => sendPlayerState(true);
+          player.onplay = () => sendPlayerState(false);
+          player.onseeked = () => sendPlayerState(player.paused);
+        }
+      }
+    }
+
+    function extractYouTubeId(url) {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : null;
+    }
+
+    function onYouTubeStateChange(event) {
+      if (!isOwner) return;
+      const paused = (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED);
+      sendPlayerState(paused);
+    }
+
+    async function sendPlayerState(paused) {
+      if (!isOwner || !currentRoom) return;
+      let currentTime = 0;
+      if (playerType === 'youtube' && youtubePlayer) {
+        currentTime = youtubePlayer.getCurrentTime();
+      } else {
+        currentTime = document.getElementById('player').currentTime;
+      }
+      await fetch(`${API}/player`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          room_id: currentRoom.id,
+          user_id: myUserId,
+          paused,
+          current_time: currentTime
+        })
+      });
+    }
+
+    function initRoomPolling() {
+      clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        if (!currentRoom) return;
+        const resp = await fetch(`${API}/room_state?id=${currentRoom.id}`);
+        const state = await resp.json();
+        document.getElementById('room-info').innerText = `👥 ${Object.keys(state.users).length}/${state.max_users}`;
+        updatePlayer(state);
+        updateChat(state.chat);
+      }, 1000);
+    }
+
+    function updatePlayer(state) {
+      if (!state.video_url) return;
+      if (playerType === 'mp4') {
+        const video = document.getElementById('player');
+        if (video.src !== state.video_url) video.src = state.video_url;
+        if (state.paused && !video.paused) video.pause();
+        if (!state.paused && video.paused) video.play().catch(()=>{});
+        if (Math.abs(video.currentTime - state.current_time) > 0.5) video.currentTime = state.current_time;
+      } else if (playerType === 'youtube' && youtubePlayer) {
+        if (state.paused && youtubePlayer.getPlayerState() === 1) youtubePlayer.pauseVideo();
+        if (!state.paused && youtubePlayer.getPlayerState() === 2) youtubePlayer.playVideo();
+        if (Math.abs(youtubePlayer.getCurrentTime() - state.current_time) > 1.5)
+          youtubePlayer.seekTo(state.current_time, true);
+      }
+    }
+
+    function updateChat(messages) {
+      const box = document.getElementById('chat-box');
+      if (!messages) return;
+      box.innerHTML = messages.map(m => `
+        <div class="chat-msg ${m.muted ? 'muted' : ''}">
+          <b>${m.user_name}:</b> ${m.text}
+        </div>
+      `).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text || !currentRoom) return;
+      const resp = await fetch(`${API}/chat`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({room_id: currentRoom.id, user_id: myUserId, text})
+      });
+      const data = await resp.json();
+      if (data.error) alert(data.error);
+      input.value = '';
+    }
+
+    document.getElementById('invite-btn').addEventListener('click', () => {
+      if (!currentRoom) return;
+      const link = `https://t.me/smotrimrubot?start=room_${currentRoom.id}`;
+      navigator.clipboard.writeText(link).then(() => alert('Ссылка скопирована!'));
+    });
+
+    document.getElementById('create-room-nav').addEventListener('click', createRoom);
+    document.getElementById('send-msg').addEventListener('click', sendMessage);
+    document.getElementById('leave-btn').addEventListener('click', async () => {
+      await fetch(`${API}/leave`, {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({room_id: currentRoom.id, user_id: myUserId})});
+      currentRoom = null; clearInterval(pollInterval);
+      showSection('menu'); loadRooms();
+    });
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => showSection(btn.dataset.tab));
+    });
+
+    function showSection(section) {
+      ['menu','room','settings'].forEach(s => document.getElementById(`${s}-section`).style.display = 'none');
+      document.getElementById(`${section}-section`).style.display = 'block';
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector(`[data-tab="${section}"]`)?.classList.add('active');
+    }
+
+    // Темы и анимации
+    function toggleTheme() {
+      document.body.classList.toggle('light');
+      const isLight = document.body.classList.contains('light');
+      document.getElementById('theme-toggle').classList.toggle('active', !isLight);
+    }
+    function toggleAnimation() {
+      const canvas = document.getElementById('worm-canvas');
+      canvas.style.display = canvas.style.display === 'none' ? 'block' : 'none';
+      document.getElementById('anim-toggle').classList.toggle('active');
+    }
+
+    // Canvas-анимация (червячки)
+    const canvas = document.getElementById('worm-canvas');
+    const ctx = canvas.getContext('2d');
+    let worms = [];
+    let animationId;
+    function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    class Worm {
+      constructor() {
+        this.segments = [];
+        const len = 6 + Math.floor(Math.random()*10);
+        for (let i=0; i<len; i++) {
+          this.segments.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height});
+        }
+        this.speed = 0.5 + Math.random()*1.5;
+        this.angle = Math.random()*Math.PI*2;
+        this.color = `hsl(${Math.random()*60 + 250}, 70%, 70%)`;
+      }
+      update() {
+        let head = this.segments[0];
+        head.x += Math.cos(this.angle) * this.speed;
+        head.y += Math.sin(this.angle) * this.speed;
+        for (let i=1; i<this.segments.length; i++) {
+          const prev = this.segments[i-1];
+          const cur = this.segments[i];
+          const dx = prev.x - cur.x, dy = prev.y - cur.y;
+          const dist = Math.sqrt(dx*dx+dy*dy);
+          if (dist > 8) {
+            cur.x += dx * 0.3;
+            cur.y += dy * 0.3;
+          }
+        }
+        if (head.x < 0 || head.x > canvas.width) this.angle = Math.PI - this.angle;
+        if (head.y < 0 || head.y > canvas.height) this.angle = -this.angle;
+      }
+      draw(ctx) {
+        ctx.beginPath();
+        ctx.moveTo(this.segments[0].x, this.segments[0].y);
+        for (let i=1; i<this.segments.length; i++) {
+          ctx.lineTo(this.segments[i].x, this.segments[i].y);
+        }
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+    }
+
+    function initWorms(count=12) {
+      worms = [];
+      for (let i=0; i<count; i++) worms.push(new Worm());
+    }
+    function animate() {
+      if (canvas.style.display === 'none') { animationId = requestAnimationFrame(animate); return; }
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      worms.forEach(w => { w.update(); w.draw(ctx); });
+      animationId = requestAnimationFrame(animate);
+    }
+    initWorms();
+    animate();
+
+    initUser();
+  </script>
+</body>
+</html>
